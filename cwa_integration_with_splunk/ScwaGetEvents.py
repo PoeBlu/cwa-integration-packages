@@ -4,7 +4,9 @@
 #
 import sys
 if sys.version_info[0] < 2 or sys.version_info[1] < 7:
-    print("You must have python 2.7 or above to execute the script. Current version is "+str(sys.version_info[0]) +"."+str(sys.version_info[1]))
+    print(
+        f"You must have python 2.7 or above to execute the script. Current version is {str(sys.version_info[0])}.{str(sys.version_info[1])}"
+    )
     exit()
 import json
 import requests
@@ -27,11 +29,7 @@ PROXY_USER_NAME = 'USER_NAME'
 PROXY_PASSWORD = 'PASSWORD'
 PROXY_PORT = 'PROXY_PORT'
 
-if os.name == 'nt':
-    SPLUNK_HOME = 'C:\Program Files\Splunk'
-else:
-    SPLUNK_HOME = '/opt/splunk'
-
+SPLUNK_HOME = 'C:\Program Files\Splunk' if os.name == 'nt' else '/opt/splunk'
 PAGE_SIZE = 100
 RETRY_COUNT = 3
 CONFIG_INI = os.path.join(SPLUNK_HOME, 'bin', 'scripts', 'ScwaGetEventsConfig.ini')
@@ -64,8 +62,7 @@ def setupLogging(
         env_key='LOG_CFG'
 ):
     path = default_path
-    value = os.getenv(env_key, None)
-    if value:
+    if value := os.getenv(env_key, None):
         path = value
     if os.path.exists(path):
         with open(path, 'rt') as f:
@@ -98,14 +95,21 @@ def getCredsFromSplunkStorage():
         session_key = line
     splunkService = client.connect(token=session_key)
     storage_passwords = splunkService.storage_passwords
-    current_credentials = [k for k in storage_passwords if k.content.get('realm') == SCWP_API_KEYS_REALM]
-    if len(current_credentials) == 0:
+    if not (
+        current_credentials := [
+            k
+            for k in storage_passwords
+            if k.content.get('realm') == SCWP_API_KEYS_REALM
+        ]
+    ):
         raise Exception("No SCWP credentials found in Splunk storage.")
-    else:
-        for current_credential in current_credentials:
-            scwaCreds = {'clientId': current_credential.content.get('username'),
-                         'clientSecretKey': current_credential.content.get('clear_password')}
-            return scwaCreds
+    for current_credential in current_credentials:
+        return {
+            'clientId': current_credential.content.get('username'),
+            'clientSecretKey': current_credential.content.get(
+                'clear_password'
+            ),
+        }
 
 
 def authenticate():
@@ -115,15 +119,13 @@ def authenticate():
             authResponse = requests.post(scwaAuthUrl, data=authRequestJson, headers=authHeaders, proxies=proxy, verify=False)
         else:
             authResponse = requests.post(scwaAuthUrl, data=authRequestJson, headers=authHeaders, verify=False)
-        if authResponse.status_code != requests.codes.ok:
-            if retry >= RETRY_COUNT:
-                authResponse.raise_for_status()
-            time.sleep(retry * 60)
-            continue
-        else:
+        if authResponse.status_code == requests.codes.ok:
             break
+        if retry >= RETRY_COUNT:
+            authResponse.raise_for_status()
+        time.sleep(retry * 60)
     accessToken = authResponse.json()['access_token']
-    authHeaders['Authorization'] = 'Bearer ' + accessToken
+    authHeaders['Authorization'] = f'Bearer {accessToken}'
 
 
 try:
@@ -143,7 +145,9 @@ try:
             update_status_file = False
             exit(1)
         else:
-            proxy[proxy_protocol] = proxy_protocol + "://" + proxy_user + ":" + proxy_password + "@" + proxy_host + ":" + proxy_port
+            proxy[
+                proxy_protocol
+            ] = f"{proxy_protocol}://{proxy_user}:{proxy_password}@{proxy_host}:{proxy_port}"
     customerId = Config.get(CONFIG_CREDS_SECTION, CUSTOMER_ID)
     domainId = Config.get(CONFIG_CREDS_SECTION, DOMAIN_ID)
     creds = getCreds()
@@ -161,16 +165,15 @@ try:
     startDate = statusIni.get(STATUS_DATES_SECTION, START_DATE)
     getEventsFromDays = Config.getint(CONFIG_EVENTS_SECTION, GET_EVENTS_FROM_DAYS)
     if (startDate is None) or (startDate == ""):
-        startDate = (datetime.today() - timedelta(days=getEventsFromDays)).isoformat()
+        startDate = (datetime.now() - timedelta(days=getEventsFromDays)).isoformat()
+    elif startDate.endswith('Z'):
+        startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(milliseconds=1)).isoformat()
     else:
-        if startDate.endswith('Z'):
-            startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(milliseconds=1)).isoformat()
-        else:
-            startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%f') + timedelta(milliseconds=1)).isoformat()
+        startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%f') + timedelta(milliseconds=1)).isoformat()
 
     eventTypes = eventTypeFilterConfig.strip().split(',')
     eventTypesWithQuotes = ','.join('\"{0}\"'.format(eventType) for eventType in eventTypes)
-    eventTypeFilter = 'type_class IN [' + eventTypesWithQuotes + ']'
+    eventTypeFilter = f'type_class IN [{eventTypesWithQuotes}]'
 
     getScwaEventsRequest['startDate'] = startDate
     getScwaEventsRequest['endDate'] = datetime.now().isoformat()

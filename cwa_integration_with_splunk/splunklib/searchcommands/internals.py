@@ -126,7 +126,7 @@ class CommandLineParser(object):
         command_args = cls._arguments_re.match(argv)
 
         if command_args is None:
-            raise SyntaxError('Syntax error: {}'.format(argv))
+            raise SyntaxError(f'Syntax error: {argv}')
 
         # Parse options
 
@@ -134,7 +134,8 @@ class CommandLineParser(object):
             name, value = option.group('name'), option.group('value')
             if name not in command.options:
                 raise ValueError(
-                    'Unrecognized {} command option: {}={}'.format(command.name, name, json_encode_string(value)))
+                    f'Unrecognized {command.name} command option: {name}={json_encode_string(value)}'
+                )
             command.options[name].value = cls.unquote(value)
 
         missing = command.options.get_missing()
@@ -142,8 +143,11 @@ class CommandLineParser(object):
         if missing is not None:
             if len(missing) > 1:
                 raise ValueError(
-                    'Values for these {} command options are required: {}'.format(command.name, ', '.join(missing)))
-            raise ValueError('A value for {} command option {} is required'.format(command.name, missing[0]))
+                    f"Values for these {command.name} command options are required: {', '.join(missing)}"
+                )
+            raise ValueError(
+                f'A value for {command.name} command option {missing[0]} is required'
+            )
 
         # Parse field names
 
@@ -175,7 +179,7 @@ class CommandLineParser(object):
 
         if string[0] == '"':
             if len(string) == 1 or string[-1] != '"':
-                raise SyntaxError('Poorly formed string literal: ' + string)
+                raise SyntaxError(f'Poorly formed string literal: {string}')
             string = string[1:-1]
 
         if len(string) == 0:
@@ -186,7 +190,7 @@ class CommandLineParser(object):
             if value == '""':
                 return '"'
             if len(value) < 2:
-                raise SyntaxError('Poorly formed string literal: ' + string)
+                raise SyntaxError(f'Poorly formed string literal: {string}')
             return value[1]
 
         result = re.sub(cls._escaped_character_re, replace, string)
@@ -244,14 +248,14 @@ class ConfigurationSettingsType(type):
       Adds a ConfigurationSettings attribute to a :meth:`ReportingCommand.map` method, if there is one.
 
     """
-    def __new__(mcs, module, name, bases):
-        mcs = super(ConfigurationSettingsType, mcs).__new__(mcs, str(name), bases, {})
-        return mcs
+    def __new__(cls, module, name, bases):
+        cls = super(ConfigurationSettingsType, cls).__new__(cls, str(name), bases, {})
+        return cls
 
-    def __init__(cls, module, name, bases):
+    def __init__(self, module, name, bases):
 
-        super(ConfigurationSettingsType, cls).__init__(name, bases, None)
-        cls.__module__ = module
+        super(ConfigurationSettingsType, self).__init__(name, bases, None)
+        self.__module__ = module
 
     @staticmethod
     def validate_configuration_setting(specification, name, value):
@@ -260,9 +264,9 @@ class ConfigurationSettingsType(type):
                 type_names = specification.type.__name__
             else:
                 type_names = ', '.join(imap(lambda t: t.__name__, specification.type))
-            raise ValueError('Expected {} value, not {}={}'.format(type_names, name, repr(value)))
+            raise ValueError(f'Expected {type_names} value, not {name}={repr(value)}')
         if specification.constraint and not specification.constraint(value):
-            raise ValueError('Illegal value: {}={}'.format(name, repr(value)))
+            raise ValueError(f'Illegal value: {name}={repr(value)}')
         return value
 
     specification = namedtuple(
@@ -347,7 +351,7 @@ class InputHeader(dict):
 
     """
     def __str__(self):
-        return '\n'.join([name + ':' + value for name, value in six.iteritems(self)])
+        return '\n'.join([f'{name}:{value}' for name, value in six.iteritems(self)])
 
     def read(self, ifile):
         """ Reads an input header from an input file.
@@ -430,7 +434,7 @@ class ObjectView(object):
 class Recorder(object):
 
     def __init__(self, path, f):
-        self._recording = gzip.open(path + '.gz', 'wb')
+        self._recording = gzip.open(f'{path}.gz', 'wb')
         self._file = f
 
     def __getattr__(self, name):
@@ -490,7 +494,7 @@ class RecordWriter(object):
 
     @is_flushed.setter
     def is_flushed(self, value):
-        self._flushed = True if value else False
+        self._flushed = bool(value)
 
     @property
     def ofile(self):
@@ -503,7 +507,7 @@ class RecordWriter(object):
     def flush(self, finished=None, partial=None):
         assert finished is None or isinstance(finished, bool)
         assert partial is None or isinstance(partial, bool)
-        assert not (finished is None and partial is None)
+        assert finished is not None or partial is not None
         assert finished is None or partial is None
         self._ensure_validity()
 
@@ -539,7 +543,7 @@ class RecordWriter(object):
 
         if fieldnames is None:
             self._fieldnames = fieldnames = list(record.keys())
-            value_list = imap(lambda fn: (str(fn), str('__mv_') + str(fn)), fieldnames)
+            value_list = imap(lambda fn: (str(fn), f'__mv_{str(fn)}'), fieldnames)
             self._writerow(list(chain.from_iterable(value_list)))
 
         get_value = record.get
@@ -580,10 +584,14 @@ class RecordWriter(object):
                                 value = str(value.real)
                             elif value_t is six.text_type:
                                 value = value
-                            elif value_t is int or value_t is int or value_t is float or value_t is complex:
+                            elif (
+                                value_t is int
+                                or value_t is float
+                                or value_t is complex
+                            ):
                                 value = str(value)
                             elif issubclass(value_t, (dict, list, tuple)):
-                                value = str(''.join(RecordWriter._iterencode_json(value, 0)))
+                                value = ''.join(RecordWriter._iterencode_json(value, 0))
                             else:
                                 value = repr(value).encode('utf-8', errors='backslashreplace')
 
@@ -610,12 +618,12 @@ class RecordWriter(object):
                 values += (value, None)
                 continue
 
-            if value_t is int or value_t is int or value_t is float or value_t is complex:
+            if value_t is int or value_t is float or value_t is complex:
                 values += (str(value), None)
                 continue
 
             if issubclass(value_t, dict):
-                values += (str(''.join(RecordWriter._iterencode_json(value, 0))), None)
+                values += (''.join(RecordWriter._iterencode_json(value, 0)), None)
                 continue
 
             values += (repr(value), None)
@@ -638,7 +646,7 @@ class RecordWriter(object):
 
         @staticmethod
         def _default(o):
-            raise TypeError(repr(o) + ' is not JSON serializable')
+            raise TypeError(f'{repr(o)} is not JSON serializable')
 
         _iterencode_json = make_encoder(
             {},                       # markers (for detecting circular references)
@@ -742,7 +750,7 @@ class RecordWriterV2(RecordWriter):
             if partial is True:
                 finished = False
 
-            metadata = [item for item in (('inspector', inspector), ('finished', finished))]
+            metadata = [('inspector', inspector), ('finished', finished)]
             self._write_chunk(metadata, self._buffer.getvalue())
             self._clear()
 
@@ -761,7 +769,7 @@ class RecordWriterV2(RecordWriter):
 
     def write_metric(self, name, value):
         self._ensure_validity()
-        self._inspector['metric.' + name] = value
+        self._inspector[f'metric.{name}'] = value
 
     def _clear(self):
         RecordWriter._clear(self)
@@ -770,14 +778,18 @@ class RecordWriterV2(RecordWriter):
     def _write_chunk(self, metadata, body):
 
         if metadata:
-            metadata = str(''.join(self._iterencode_json(dict([(n, v) for n, v in metadata if v is not None]), 0)))
+            metadata = ''.join(
+                self._iterencode_json(
+                    dict([(n, v) for n, v in metadata if v is not None]), 0
+                )
+            )
             metadata_length = len(metadata)
         else:
             metadata_length = 0
 
         body_length = len(body)
 
-        if not (metadata_length > 0 or body_length > 0):
+        if metadata_length <= 0 and body_length <= 0:
             return
 
         start_line = 'chunked 1.0,%s,%s\n' % (metadata_length, body_length)

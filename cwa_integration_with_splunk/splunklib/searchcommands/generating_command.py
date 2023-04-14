@@ -203,7 +203,7 @@ class GeneratingCommand(SearchCommand):
             action = getattr(metadata, 'action', None)
 
             if action != 'execute':
-                raise RuntimeError('Expected execute action, not {}'.format(action))
+                raise RuntimeError(f'Expected execute action, not {action}')
 
         self._record_writer.write_records(self.generate())
         self.finish()

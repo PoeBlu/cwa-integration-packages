@@ -5,7 +5,9 @@
 #
 import sys
 if sys.version_info[0] < 3 or sys.version_info[1] < 7:
-    print("You must have python 3.7 or above to execute the script. Current version is "+str(sys.version_info[0]) +"."+str(sys.version_info[1]))
+    print(
+        f"You must have python 3.7 or above to execute the script. Current version is {str(sys.version_info[0])}.{str(sys.version_info[1])}"
+    )
     exit()
 import json
 from pathlib import Path
@@ -55,7 +57,9 @@ logger.addHandler(fh)
 configFileName = 'SNOWTicketsCWAEventsConfig.ini'
 # Setting variables from config.ini file
 # Reading customer account information
-logger.info("Reading place holders for CWA customer account information from " + configFileName + " file")
+logger.info(
+    f"Reading place holders for CWA customer account information from {configFileName} file"
+)
 CUSTOMER_ID = 'CUSTOMER_ID'
 DOMAIN_ID = 'DOMAIN_ID'
 CLIENT_ID = 'CLIENT_ID'
@@ -63,13 +67,13 @@ CLIENT_SECRET = 'CLIENT_SECRET'
 
 # Reading and creating paths of required files
 logger.info("Reading and creating path for required files.")
-CONFIG_INI = Path(os.getcwd() + '/' + configFileName)
-LOG_FILE = Path(os.getcwd() + '/create_SNOW_ticket.log')
+CONFIG_INI = Path(f'{os.getcwd()}/{configFileName}')
+LOG_FILE = Path(f'{os.getcwd()}/create_SNOW_ticket.log')
 
 if not CONFIG_INI.is_file():
     logger.error(
-        " File " + str(CONFIG_INI) + " is missing. " "Place the missing  file in directory " + str(
-            Path(os.getcwd())) + " and re-run the script.")
+        f" File {str(CONFIG_INI)} is missing. Place the missing  file in directory {str(Path(os.getcwd()))} and re-run the script."
+    )
     exit()
 # Reading values for parameters to be used in getEvent API
 logger.info("Reading placeholders for parameters to be used in getEvent API request body.")
@@ -85,7 +89,9 @@ PAGE_SIZE = 100
 RETRY_COUNT = 3
 
 # Reading values for SNOW configuration
-logger.info("Reading placeholders of SNOW account from " + configFileName + " file.")
+logger.info(
+    f"Reading placeholders of SNOW account from {configFileName} file."
+)
 SNOW_CONFIG_SECTION = 'SNOWConfigurations'
 SNOW_INSTANCE = 'SnowInstance'
 SNOW_USER_NAME = 'SnowUserName'
@@ -114,7 +120,7 @@ def read_values_from_config():
           check_severity,snow_summary_max_char
 
     try:
-        logger.info("Reading values from " + configFileName + " file")
+        logger.info(f"Reading values from {configFileName} file")
         config = configparser.ConfigParser()
         config.read(CONFIG_INI)
 
@@ -130,12 +136,16 @@ def read_values_from_config():
         if clientId == "" or clientSecret == "" or eventTypeFilterConfig == "" or snowInstance == "" \
                 or snowUserName == "" or snowUserPassword == "" \
                  or check_severity == "" or snow_summary_max_char == "":
-            logger.error("One or more required values are missing in " + configFileName + " file ")
+            logger.error(
+                f"One or more required values are missing in {configFileName} file "
+            )
             exit()
         else:
             values_in_config_file = True
     except Exception as ex:
-        logger.error("Exception occurred while reading values from " + configFileName + " file " + str(ex))
+        logger.error(
+            f"Exception occurred while reading values from {configFileName} file {str(ex)}"
+        )
 
     return values_in_config_file
 
@@ -149,23 +159,23 @@ def authenticate_cwa_customer():
         for retry in range(RETRY_COUNT):
             authRequestJson = json.dumps(authRequest)
             authResponse = requests.post(scwaAuthUrl, data=authRequestJson, headers=authHeaders)
-            if authResponse.status_code != requests.codes.ok:
-                if retry >= RETRY_COUNT:
-                    authResponse.raise_for_status()
-                time.sleep(retry * 60)
-                continue
-            else:
+            if authResponse.status_code == requests.codes.ok:
                 break
+            if retry >= RETRY_COUNT:
+                authResponse.raise_for_status()
+            time.sleep(retry * 60)
         accessToken = authResponse.json()['access_token']
         customerId = authResponse.json()['x-epmp-customer-id']
         domainId = authResponse.json()['x-epmp-domain-id']
-        authHeaders['Authorization'] = 'Bearer ' + accessToken
+        authHeaders['Authorization'] = f'Bearer {accessToken}'
         authHeaders['x-epmp-customer-id'] = customerId
         authHeaders['x-epmp-domain-id'] = domainId
         logger.info("Authentication successful")
         is_authenticate = True
     except Exception as ex:
-        logger.error("Exception occurred while authenticating customer with CWA" + str(ex))
+        logger.error(
+            f"Exception occurred while authenticating customer with CWA{str(ex)}"
+        )
     return is_authenticate
 
 
@@ -180,7 +190,7 @@ def authenticate_snow():
         snow_incident = snow_connection.resource(api_path='/table/incident')
         is_snow_authenticate = True
     except Exception as ex:
-        logger.error("Exception occurred while authenticating ServiceNow " + str(ex))
+        logger.error(f"Exception occurred while authenticating ServiceNow {str(ex)}")
     return is_snow_authenticate
 
 
@@ -196,20 +206,19 @@ def get_cwa_events():
             logger.error("GetEventsFromDays cannot be negative number or a zero . Provide a positive number grater than zero.")
             exit ()
         if (startDate is None) or (startDate == ""):
-            startDate = (datetime.today() - timedelta(days=getEventsFromDays)).isoformat()
+            startDate = (datetime.now() - timedelta(days=getEventsFromDays)).isoformat()
+        elif startDate.endswith('Z'):
+            startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(
+                milliseconds=1)).isoformat()
         else:
-            if startDate.endswith('Z'):
-                startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%fZ') + timedelta(
-                    milliseconds=1)).isoformat()
-            else:
-                startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%f') + timedelta(
-                    milliseconds=1)).isoformat()
+            startDate = (datetime.strptime(startDate, '%Y-%m-%dT%H:%M:%S.%f') + timedelta(
+                milliseconds=1)).isoformat()
 
         eventTypes = eventTypeFilterConfig.strip().split(',')
         eventTypesWithQuotes = ','.join('\"{0}\"'.format(eventType) for eventType in eventTypes)
         check_severities = check_severity.strip().split(',')
         severity='||'.join(["(check_severity=\"" + severity + "\" )" for severity in check_severities])
-        eventTypeFilter = '( type_class = ' + eventTypesWithQuotes + ') && ('+severity+') '
+        eventTypeFilter = f'( type_class = {eventTypesWithQuotes}) && ({severity}) '
         getScwaEventsRequest['startDate'] = startDate
         getScwaEventsRequest['endDate'] = datetime.now().isoformat()
         getScwaEventsRequest['additionalFilters'] = eventTypeFilter
@@ -225,7 +234,10 @@ def get_cwa_events():
 
             if totalScwaEvents == 0:
                 if pageNumber == 0:
-                    logger.info("No new events were found between "+startDate + " and "+  getScwaEventsRequest['endDate'])
+                    logger.info(
+                        f"No new events were found between {startDate} and "
+                        + getScwaEventsRequest['endDate']
+                    )
                     exit()
                 break
 
@@ -238,28 +250,45 @@ def get_cwa_events():
                                scwaEvent['service_name'] + "\' by check \'" + scwaEvent['check_id'] + "\' on \'" + \
                                scwaEvent['account_name'] + "\'"
                 if scwaEvent['check_result'] == "Fail":
-                    if not scwaEvent['resource_name']:
-                        resource_name="NA"
-                    else:
-                        resource_name=scwaEvent['resource_name']
-                    dict_cwa_events.setdefault(eventSummary, {})[scwaEvent['resource_id']] = html_prefix+"<th><u> Resource Name :- </u>" +resource_name + "</th>"+\
-                                                                                             "<th><u> Resource ID :- </u>" +scwaEvent['resource_id']+ "</th>"+\
-                                                                                             "<th><u>  Check Evidence :- </u>" +scwaEvent['check_evidence'] +"</th>"+html_postfix
+                    resource_name = (
+                        scwaEvent['resource_name']
+                        if scwaEvent['resource_name']
+                        else "NA"
+                    )
+                    dict_cwa_events.setdefault(eventSummary, {})[
+                        scwaEvent['resource_id']
+                    ] = (
+                        (
+                            (
+                                (
+                                    (
+                                        f"{html_prefix}<th><u> Resource Name :- </u>{resource_name}</th><th><u> Resource ID :- </u>"
+                                        + scwaEvent['resource_id']
+                                    )
+                                    + "</th>"
+                                )
+                                + "<th><u>  Check Evidence :- </u>"
+                            )
+                            + scwaEvent['check_evidence']
+                        )
+                        + "</th>"
+                    ) + html_postfix
                     dict_cwa_event_priority.setdefault(eventSummary, SNOW_TICKET_PRIORITY[scwaEvent["severity_id_d"]])
                     dict_policy_name.setdefault(eventSummary, scwaEvent['policy_name'])
                     dict_check_name.setdefault(eventSummary, scwaEvent['check_name'])
-                else:
-                    if dict_cwa_events:
-                        for record in dict_cwa_events:
-                            for key, value in list(dict_cwa_events[record].items()):
-                                if key == scwaEvent['resource_id']:
-                                    del dict_cwa_events[record][key]
+                elif dict_cwa_events:
+                    for record in dict_cwa_events:
+                        for key, value in list(dict_cwa_events[record].items()):
+                            if key == scwaEvent['resource_id']:
+                                del dict_cwa_events[record][key]
                 sys.stdout.flush()
 
             pageNumber += 1
         events_gathered_successfully = True
     except Exception as ex:
-        logger.error("Cannot proceed further. Exception occurred while fetching cwa events " + str(ex) + " .")
+        logger.error(
+            f"Cannot proceed further. Exception occurred while fetching cwa events {str(ex)} ."
+        )
     return events_gathered_successfully
 
 def snow_incident_already_exists(search_result_response):
@@ -270,20 +299,22 @@ def snow_incident_already_exists(search_result_response):
     index=0
     while (index< len(response_json['result'])):
         incident_state=response_json['result'][index]['incident_state']
-        if incident_state == "6" or incident_state == "7" or incident_state == "8":
+        if incident_state in ["6", "7", "8"]:
             incident_id = None
         else:
             incident_id = response_json['result'][index]['number']
             break
-        index = index+1
+        index += 1
     return  incident_id
 
 def snow_get_incident_details(update_incident_response):
-    incident_details = {}
     update_incident_responsejson = json.loads(update_incident_response._response.text)
-    incident_details["number"]=str(update_incident_responsejson['result']['number'])
-    incident_details['short_description']=update_incident_responsejson['result']['short_description']
-    return incident_details
+    return {
+        "number": str(update_incident_responsejson['result']['number']),
+        'short_description': update_incident_responsejson['result'][
+            'short_description'
+        ],
+    }
 
 def create_tickets_in_SNOW():
     create_tickets_in_SNOW.not_processed_resources = []
@@ -304,9 +335,23 @@ def create_tickets_in_SNOW():
                     snow_ticket_search = snow_incident.get(query={'short_description': event})
                     snow_ticket=snow_incident_already_exists(snow_ticket_search)
                     if snow_ticket != None:
-                        new_comment = "[code]<h3><u>Policy Name</u></h3>" + dict_policy_name[event] + '\n' + \
-                                          "[code]<h3><u>Check Name</u></h3>" + dict_check_name[event] + '\n' + \
-                                          "[code]<h3><u>Impacted Resources</u></h3>\n " + "[code]"+all_impacted_resources
+                        new_comment = (
+                            (
+                                (
+                                    (
+                                        (
+                                            f"[code]<h3><u>Policy Name</u></h3>{dict_policy_name[event]}"
+                                            + '\n'
+                                            + "[code]<h3><u>Check Name</u></h3>"
+                                        )
+                                        + dict_check_name[event]
+                                    )
+                                    + '\n'
+                                )
+                                + "[code]<h3><u>Impacted Resources</u></h3>\n "
+                            )
+                            + "[code]"
+                        ) + all_impacted_resources
                         updated_incident = snow_incident.update(query={'number': snow_ticket},
                                                          payload={'comments':new_comment})
                         incident_details=snow_get_incident_details(updated_incident)
@@ -317,9 +362,23 @@ def create_tickets_in_SNOW():
 
                     else:
                         priority = dict_cwa_event_priority[event]
-                        new_description = "[code]<h3><u>Policy Name</u></h3>" + dict_policy_name[event] + '\n' + \
-                                          "[code]<h3><u>Check Name</u></h3>" + dict_check_name[event] + '\n' + \
-                                          "[code]<h3><u>Impacted Resources</u></h3>\n " + "[code]"+all_impacted_resources
+                        new_description = (
+                            (
+                                (
+                                    (
+                                        (
+                                            f"[code]<h3><u>Policy Name</u></h3>{dict_policy_name[event]}"
+                                            + '\n'
+                                            + "[code]<h3><u>Check Name</u></h3>"
+                                        )
+                                        + dict_check_name[event]
+                                    )
+                                    + '\n'
+                                )
+                                + "[code]<h3><u>Impacted Resources</u></h3>\n "
+                            )
+                            + "[code]"
+                        ) + all_impacted_resources
 
                         new_snow_ticket_details = {'short_description': event,
                                                    'comments': new_description,
@@ -335,48 +394,46 @@ def create_tickets_in_SNOW():
                                     str(incident_details['short_description']))
 
                 except Exception as ex:
-                    logger.error("Exception occurred while creating ServiceNow ticket " + str(ex))
+                    logger.error(f"Exception occurred while creating ServiceNow ticket {str(ex)}")
                     create_tickets_in_SNOW.not_processed_resources.append(all_impacted_resources)
                     continue
 
     except Exception as ex:
-        logger.error("Exception occurred while creating ticket in ServiceNow " + str(ex))
+        logger.error(
+            f"Exception occurred while creating ticket in ServiceNow {str(ex)}"
+        )
 
 
 def report_not_processed_resources():
     try:
         events_collected = len(dict_cwa_events)
-        tickets_created = len(create_tickets_in_SNOW.tickets_created)
-        tickets_updated = len(create_tickets_in_SNOW.tickets_updated)
         if events_collected > 0:
             formatter = logging.Formatter("%(message)s")
             fh.setFormatter(formatter)
             logger.addHandler(fh)
+            tickets_created = len(create_tickets_in_SNOW.tickets_created)
             if tickets_created > 0:
                 logger.info("======================================================")
                 logger.info("Following are the newly created ServiceNow tickets:- ")
                 logger.info("======================================================")
-                bullet = 0
-                for new_ticket in create_tickets_in_SNOW.tickets_created:
-                    bullet += 1
-                    logger.info(str(bullet) + "." + new_ticket)
+                for bullet, new_ticket in enumerate(create_tickets_in_SNOW.tickets_created, start=1):
+                    logger.info(f"{str(bullet)}.{new_ticket}")
             else:
                 logger.info("No new ticket was created.")
+            tickets_updated = len(create_tickets_in_SNOW.tickets_updated)
             if tickets_updated > 0:
                 logger.info("======================================================================================")
                 logger.info("Following tickets were already created and updated with new misconfigured resources:- ")
                 logger.info("======================================================================================")
-                bullet = 0
-                for updated_ticket in create_tickets_in_SNOW.tickets_updated:
-                    bullet += 1
-                    logger.info(str(bullet) + "." + updated_ticket)
+                for bullet, updated_ticket in enumerate(create_tickets_in_SNOW.tickets_updated, start=1):
+                    logger.info(f"{str(bullet)}.{updated_ticket}")
             else:
                 logger.info("All tickets were newly created.")
             if tickets_updated > 0 or tickets_created > 0:
                 logger.info("=============================================\n"
                             "SUMMARY")
-                logger.info("New tickets created:- " + str(tickets_created))
-                logger.info("Existing tickets updated:- " + str(tickets_updated))
+                logger.info(f"New tickets created:- {tickets_created}")
+                logger.info(f"Existing tickets updated:- {tickets_updated}")
                 logger.info("=============================================\n")
             if events_collected != (tickets_created + tickets_updated):
                 logger.error("Could not open a ServiceNow ticket for following Policies and Checks :- \n")
@@ -385,12 +442,16 @@ def report_not_processed_resources():
         else:
             logger.info("All misconfigured resources seem to be fixed now. ")
     except Exception as ex:
-        logger.error("Exception occurred while summarizing result of the run. " + str(ex))
+        logger.error(
+            f"Exception occurred while summarizing result of the run. {str(ex)}"
+        )
 
 
-if read_values_from_config():
-    if authenticate_cwa_customer():
-        if authenticate_snow():
-            if get_cwa_events():
-                create_tickets_in_SNOW()
-                report_not_processed_resources()
+if (
+    read_values_from_config()
+    and authenticate_cwa_customer()
+    and authenticate_snow()
+    and get_cwa_events()
+):
+    create_tickets_in_SNOW()
+    report_not_processed_resources()

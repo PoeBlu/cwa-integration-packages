@@ -77,9 +77,10 @@ class Configuration(object):
             # Construct ConfigurationSettings instance for the command class
 
             o.ConfigurationSettings = ConfigurationSettingsType(
-                module=o.__module__ + '.' + o.__name__,
+                module=f'{o.__module__}.{o.__name__}',
                 name='ConfigurationSettings',
-                bases=(o.ConfigurationSettings,))
+                bases=(o.ConfigurationSettings,),
+            )
 
             ConfigurationSetting.fix_up(o.ConfigurationSettings, self.settings)
             o.ConfigurationSettings.fix_up(o)
@@ -144,7 +145,7 @@ class ConfigurationSetting(property):
                 name = setting._name
 
             validate, specification = setting._get_specification()
-            backing_field_name = '_' + name
+            backing_field_name = f'_{name}'
 
             if setting.fget is None and setting.fset is None and setting.fdel is None:
 
@@ -215,7 +216,9 @@ class ConfigurationSetting(property):
         try:
             specification = ConfigurationSettingsType.specification_matrix[name]
         except KeyError:
-            raise AttributeError('Unknown configuration setting: {}={}'.format(name, repr(self._value)))
+            raise AttributeError(
+                f'Unknown configuration setting: {name}={repr(self._value)}'
+            )
 
         return ConfigurationSettingsType.validate_configuration_setting, specification
 
@@ -308,7 +311,7 @@ class Option(property):
                 validate_option_name(option.name)
 
             if option.fget is None and option.fset is None and option.fdel is None:
-                backing_field_name = '_' + name
+                backing_field_name = f'_{name}'
 
                 def fget(bfn):
                     return lambda this: getattr(this, bfn, None)
@@ -361,12 +364,12 @@ class Option(property):
             self._format = six.text_type if validator is None else validator.format
 
         def __repr__(self):
-            return '(' + repr(self.name) + ', ' + repr(self._format(self.value)) + ')'
+            return f'({repr(self.name)}, {repr(self._format(self.value))})'
 
         def __str__(self):
             value = self.value
             value = 'None' if value is None else json_encode_string(self._format(value))
-            return self.name + '=' + value
+            return f'{self.name}={value}'
 
         # region Properties
 
@@ -421,18 +424,20 @@ class Option(property):
             OrderedDict.__init__(self, ((option.name, item_class(command, option)) for (name, option) in definitions))
 
         def __repr__(self):
-            text = 'Option.View([' + ','.join(imap(lambda item: repr(item), six.itervalues(self))) + '])'
-            return text
+            return (
+                'Option.View(['
+                + ','.join(imap(lambda item: repr(item), six.itervalues(self)))
+                + '])'
+            )
 
         def __str__(self):
-            text = ' '.join([str(item) for item in six.itervalues(self) if item.is_set])
-            return text
+            return ' '.join([str(item) for item in six.itervalues(self) if item.is_set])
 
         # region Methods
 
         def get_missing(self):
             missing = [item.name for item in six.itervalues(self) if item.is_required and not item.is_set]
-            return missing if len(missing) > 0 else None
+            return missing if missing else None
 
         def reset(self):
             for value in six.itervalues(self):

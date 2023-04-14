@@ -113,7 +113,7 @@ class Fieldname(Validator):
         if value is not None:
             value = six.text_type(value)
             if Fieldname.pattern.match(value) is None:
-                raise ValueError('Illegal characters in fieldname: {}'.format(value))
+                raise ValueError(f'Illegal characters in fieldname: {value}')
         return value
 
     def format(self, value):
@@ -185,12 +185,9 @@ class Integer(Validator):
         if value is None:
             return None
         try:
-            if six.PY2:
-                value = long(value)
-            else:
-                value = int(value)
+            value = long(value) if six.PY2 else int(value)
         except ValueError:
-            raise ValueError('Expected integer value, not {}'.format(json_encode_string(value)))
+            raise ValueError(f'Expected integer value, not {json_encode_string(value)}')
 
         self.check_range(value)
         return value
@@ -278,7 +275,7 @@ class List(Validator):
             for index, item in enumerate(value):
                 value[index] = self._validator(item)
         except ValueError as error:
-            raise ValueError('Could not convert item {}: {}'.format(index, error))
+            raise ValueError(f'Could not convert item {index}: {error}')
 
         return value
 
@@ -326,7 +323,7 @@ class Match(Validator):
             return None
         value = six.text_type(value)
         if self.pattern.match(value) is None:
-            raise ValueError('Expected {}, not {}'.format(self.name, json_encode_string(value)))
+            raise ValueError(f'Expected {self.name}, not {json_encode_string(value)}')
         return value
 
     def format(self, value):
@@ -343,7 +340,7 @@ class OptionName(Validator):
         if value is not None:
             value = six.text_type(value)
             if OptionName.pattern.match(value) is None:
-                raise ValueError('Illegal characters in option name: {}'.format(value))
+                raise ValueError(f'Illegal characters in option name: {value}')
         return value
 
     def format(self, value):
@@ -360,7 +357,7 @@ class RegularExpression(Validator):
         try:
             value = re.compile(six.text_type(value))
         except re.error as error:
-            raise ValueError('{}: {}'.format(six.text_type(error).capitalize(), value))
+            raise ValueError(f'{six.text_type(error).capitalize()}: {value}')
         return value
 
     def format(self, value):
@@ -379,7 +376,7 @@ class Set(Validator):
             return None
         value = six.text_type(value)
         if value not in self.membership:
-            raise ValueError('Unrecognized value: {}'.format(value))
+            raise ValueError(f'Unrecognized value: {value}')
         return value
 
     def format(self, value):
