@@ -112,7 +112,7 @@ def _make_cookie_header(cookies):
     :return: ``str` An HTTP header cookie string.
     :rtype: ``str``
     """
-    return "; ".join("%s=%s" % (key, value) for key, value in cookies)
+    return "; ".join(f"{key}={value}" for key, value in cookies)
 
 # Singleton values to eschew None
 class _NoAuthenticationToken(object):
@@ -163,19 +163,19 @@ class UrlEncoded(str):
         UrlEncoded('ab c') + 'de f' == UrlEncoded('ab cde f')
         'ab c' + UrlEncoded('de f') == UrlEncoded('ab cde f')
     """
-    def __new__(self, val='', skip_encode=False, encode_slash=False):
+    def __new__(cls, val='', skip_encode=False, encode_slash=False):
         if isinstance(val, UrlEncoded):
             # Don't urllib.quote something already URL encoded.
             return val
         elif skip_encode:
-            return str.__new__(self, val)
+            return str.__new__(cls, val)
         elif encode_slash:
-            return str.__new__(self, urllib.parse.quote_plus(val))
+            return str.__new__(cls, urllib.parse.quote_plus(val))
         else:
             # When subclassing str, just call str's __new__ method
             # with your class and the value you want to have in the
             # new string.
-            return str.__new__(self, urllib.parse.quote(val))
+            return str.__new__(cls, urllib.parse.quote(val))
 
     def __add__(self, other):
         """self + other
@@ -207,7 +207,7 @@ class UrlEncoded(str):
         """
         raise TypeError("Cannot interpolate into a UrlEncoded object.")
     def __repr__(self):
-        return "UrlEncoded(%s)" % repr(urllib.parse.unquote(str(self)))
+        return f"UrlEncoded({repr(urllib.parse.unquote(str(self)))})"
 
 @contextmanager
 def _handle_auth_error(msg):
@@ -348,8 +348,8 @@ def _authority(scheme=DEFAULT_SCHEME, host=DEFAULT_HOST, port=DEFAULT_PORT):
     if ':' in host:
         # IPv6 addresses must be enclosed in [ ] in order to be well
         # formed.
-        host = '[' + host + ']'
-    return UrlEncoded("%s://%s:%s" % (scheme, host, port), skip_encode=True)
+        host = f'[{host}]'
+    return UrlEncoded(f"{scheme}://{host}:{port}", skip_encode=True)
 
 # kwargs: sharing, owner, app
 def namespace(sharing=None, owner=None, app=None, **kwargs):
@@ -512,7 +512,7 @@ class Context(object):
         if self.has_cookies():
             return [("Cookie", _make_cookie_header(list(self.get_cookies().items())))]
         elif self.basic and (self.username and self.password):
-            token = 'Basic %s' % b64encode(("%s:%s" % (self.username, self.password)).encode('utf-8')).decode('ascii')
+            token = f"""Basic {b64encode(f"{self.username}:{self.password}".encode('utf-8')).decode('ascii')}"""
             return [("Authorization", token)]
         elif self.token is _NoAuthenticationToken:
             return []
@@ -521,7 +521,7 @@ class Context(object):
             if self.token.startswith('Splunk '):
                 token = self.token
             else:
-                token = 'Splunk %s' % self.token
+                token = f'Splunk {self.token}'
             return [("Authorization", token)]
 
     def connect(self):
@@ -606,8 +606,7 @@ class Context(object):
         path = self.authority + self._abspath(path_segment, owner=owner,
                                               app=app, sharing=sharing)
         logging.debug("DELETE request to %s (body: %s)", path, repr(query))
-        response = self.http.delete(path, self._auth_headers, **query)
-        return response
+        return self.http.delete(path, self._auth_headers, **query)
 
     @_authentication
     @_log_duration
@@ -664,8 +663,7 @@ class Context(object):
         path = self.authority + self._abspath(path_segment, owner=owner,
                                               app=app, sharing=sharing)
         logging.debug("GET request to %s (body: %s)", path, repr(query))
-        response = self.http.get(path, self._auth_headers, **query)
-        return response
+        return self.http.get(path, self._auth_headers, **query)
 
     @_authentication
     @_log_duration
@@ -737,8 +735,7 @@ class Context(object):
         path = self.authority + self._abspath(path_segment, owner=owner, app=app, sharing=sharing)
         logging.debug("POST request to %s (body: %s)", path, repr(query))
         all_headers = headers + self._auth_headers
-        response = self.http.post(path, all_headers, **query)
-        return response
+        return self.http.post(path, all_headers, **query)
 
     @_authentication
     @_log_duration
@@ -800,16 +797,14 @@ class Context(object):
             headers = []
 
         path = self.authority \
-            + self._abspath(path_segment, owner=owner,
+                + self._abspath(path_segment, owner=owner,
                             app=app, sharing=sharing)
         all_headers = headers + self._auth_headers
         logging.debug("%s request to %s (headers: %s, body: %s)",
                       method, path, str(all_headers), repr(body))
-        response = self.http.request(path,
-                                     {'method': method,
-                                     'headers': all_headers,
-                                     'body': body})
-        return response
+        return self.http.request(
+            path, {'method': method, 'headers': all_headers, 'body': body}
+        )
 
     def login(self):
         """Logs into the Splunk instance referred to by the :class:`Context`
@@ -832,14 +827,14 @@ class Context(object):
         """
 
         if self.has_cookies() and \
-                (not self.username and not self.password):
+                    (not self.username and not self.password):
             # If we were passed session cookie(s), but no username or
             # password, then login is a nop, since we're automatically
             # logged in.
             return
 
         if self.token is not _NoAuthenticationToken and \
-                (not self.username and not self.password):
+                    (not self.username and not self.password):
             # If we were passed a session token, but no username or
             # password, then login is a nop, since we're automatically
             # logged in.
@@ -860,7 +855,7 @@ class Context(object):
 
             body = response.body.read()
             session = XML(body).findtext("./sessionKey")
-            self.token = "Splunk %s" % session
+            self.token = f"Splunk {session}"
             return self
         except HTTPError as he:
             if he.status == 401:
@@ -927,13 +922,13 @@ class Context(object):
         # namespace. If only one of app and owner is specified, use
         # '-' for the other.
         if ns.app is None and ns.owner is None:
-            return UrlEncoded("/services/%s" % path_segment, skip_encode=skip_encode)
+            return UrlEncoded(f"/services/{path_segment}", skip_encode=skip_encode)
 
         oname = "nobody" if ns.owner is None else ns.owner
         aname = "system" if ns.app is None else ns.app
-        path = UrlEncoded("/servicesNS/%s/%s/%s" % (oname, aname, path_segment),
-                          skip_encode=skip_encode)
-        return path
+        return UrlEncoded(
+            f"/servicesNS/{oname}/{aname}/{path_segment}", skip_encode=skip_encode
+        )
 
 
 def connect(**kwargs):
@@ -995,7 +990,10 @@ class HTTPError(Exception):
         except ParseError as err:
             detail = body
         message = "HTTP %d %s%s" % (
-            status, reason, "" if detail is None else " -- %s" % detail)
+            status,
+            reason,
+            "" if detail is None else f" -- {detail}",
+        )
         Exception.__init__(self, _message or message)
         self.status = status
         self.reason = reason
@@ -1130,7 +1128,7 @@ class HttpLib(object):
             # url is already a UrlEncoded. We have to manually declare
             # the query to be encoded or it will get automatically URL
             # encoded by being appended to url.
-            url = url + UrlEncoded('?' + _encode(**kwargs), skip_encode=True)
+            url = url + UrlEncoded(f'?{_encode(**kwargs)}', skip_encode=True)
         message = {
             'method': "DELETE",
             'headers': headers,
@@ -1159,7 +1157,7 @@ class HttpLib(object):
             # url is already a UrlEncoded. We have to manually declare
             # the query to be encoded or it will get automatically URL
             # encoded by being appended to url.
-            url = url + UrlEncoded('?' + _encode(**kwargs), skip_encode=True)
+            url = url + UrlEncoded(f'?{_encode(**kwargs)}', skip_encode=True)
         return self.request(url, { 'method': "GET", 'headers': headers })
 
     def post(self, url, headers=None, **kwargs):
@@ -1188,12 +1186,12 @@ class HttpLib(object):
             # We only use application/x-www-form-urlencoded if there is no other
             # Content-Type header present. This can happen in cases where we 
             # send requests as application/json, e.g. for KV Store.
-            if len([x for x in headers if x[0].lower() == "content-type"]) == 0:
+            if not [x for x in headers if x[0].lower() == "content-type"]:
                 headers.append(("Content-Type", "application/x-www-form-urlencoded"))
 
             body = kwargs.pop('body')
-            if len(kwargs) > 0:
-                url = url + UrlEncoded('?' + _encode(**kwargs), skip_encode=True)
+            if kwargs:
+                url = url + UrlEncoded(f'?{_encode(**kwargs)}', skip_encode=True)
         else:
             body = _encode(**kwargs).encode('utf-8')
         message = {
@@ -1220,7 +1218,7 @@ class HttpLib(object):
         """
         response = self.handler(url, message, **kwargs)
         response = record(response)
-        if 400 <= response.status:
+        if response.status >= 400:
             raise HTTPError(response)
 
         # Update the cookie with any HTTP request
@@ -1292,8 +1290,7 @@ class ResponseReader(io.RawIOBase):
         self._buffer = b''
         if size is not None:
             size -= len(r)
-        r = r + self._response.read(size)
-        return r
+        return r + self._response.read(size)
 
     def readable(self):
         """ Indicates that the response reader is readable."""
@@ -1338,7 +1335,7 @@ def handler(key_file=None, cert_file=None, timeout=None):
             if sys.version_info >= (2,7,9) and key_file is None and cert_file is None:
                 kwargs['context'] = ssl._create_unverified_context()
             return six.moves.http_client.HTTPSConnection(host, port, **kwargs)
-        raise ValueError("unsupported scheme: %s" % scheme)
+        raise ValueError(f"unsupported scheme: {scheme}")
 
     def request(url, message, **kwargs):
         scheme, host, port, path = _spliturl(url)

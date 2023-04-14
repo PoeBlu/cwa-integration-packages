@@ -543,10 +543,7 @@ class LegacyInterpolation(Interpolation):
     @staticmethod
     def _interpolation_replace(match, parser):
         s = match.group(1)
-        if s is None:
-            return match.group()
-        else:
-            return "%%(%s)s" % parser.optionxform(s)
+        return match.group() if s is None else "%%(%s)s" % parser.optionxform(s)
 
 
 class RawConfigParser(MutableMapping):
@@ -1027,8 +1024,7 @@ class RawConfigParser(MutableMapping):
         for lineno, line in enumerate(fp, start=1):
             comment_start = sys.maxsize
             # strip inline comments
-            inline_prefixes = dict(
-                (p, -1) for p in self._inline_comment_prefixes)
+            inline_prefixes = {p: -1 for p in self._inline_comment_prefixes}
             while comment_start == sys.maxsize and inline_prefixes:
                 next_prefixes = {}
                 for prefix, index in inline_prefixes.items():
@@ -1066,12 +1062,9 @@ class RawConfigParser(MutableMapping):
             if (cursect is not None and optname and
                 cur_indent_level > indent_level):
                 cursect[optname].append(value)
-            # a section header or option header?
             else:
                 indent_level = cur_indent_level
-                # is it a section header?
-                mo = self.SECTCRE.match(value)
-                if mo:
+                if mo := self.SECTCRE.match(value):
                     sectname = mo.group('header')
                     if sectname in self._sections:
                         if self._strict and sectname in elements_added:
@@ -1088,13 +1081,10 @@ class RawConfigParser(MutableMapping):
                         elements_added.add(sectname)
                     # So sections can't start with a continuation line
                     optname = None
-                # no section header in the file?
                 elif cursect is None:
                     raise MissingSectionHeaderError(fpname, lineno, line)
-                # an option line?
                 else:
-                    mo = self._optcre.match(value)
-                    if mo:
+                    if mo := self._optcre.match(value):
                         optname, vi, optval = mo.group('option', 'vi', 'value')
                         if not optname:
                             e = self._handle_error(e, fpname, lineno, line)
@@ -1171,7 +1161,7 @@ class RawConfigParser(MutableMapping):
         """Return a boolean value translating from other types if necessary.
         """
         if value.lower() not in self.BOOLEAN_STATES:
-            raise ValueError('Not a boolean: %s' % value)
+            raise ValueError(f'Not a boolean: {value}')
         return self.BOOLEAN_STATES[value.lower()]
 
     def _validate_value_types(self, **kwargs):
@@ -1214,9 +1204,8 @@ class RawConfigParser(MutableMapping):
             raise TypeError("section names must be strings")
         if not isinstance(option, str):
             raise TypeError("option keys must be strings")
-        if not self._allow_no_value or value:
-            if not isinstance(value, str):
-                raise TypeError("option values must be strings")
+        if (not self._allow_no_value or value) and not isinstance(value, str):
+            raise TypeError("option values must be strings")
 
         return section, option, value
 
@@ -1278,7 +1267,7 @@ class SectionProxy(MutableMapping):
         self._parser = parser
         self._name = name
         for conv in parser.converters:
-            key = 'get' + conv
+            key = f'get{conv}'
             getter = functools.partial(self.get, _impl=getattr(parser, key))
             setattr(self, key, getter)
 
@@ -1366,10 +1355,9 @@ class ConverterMapping(MutableMapping):
 
     def __setitem__(self, key, value):
         try:
-            k = 'get' + key
+            k = f'get{key}'
         except TypeError:
-            raise ValueError('Incompatible key: {} (type: {})'
-                             ''.format(key, type(key)))
+            raise ValueError(f'Incompatible key: {key} (type: {type(key)})')
         if k == 'get':
             raise ValueError('Incompatible key: cannot use "" as a name')
         self._data[key] = value
